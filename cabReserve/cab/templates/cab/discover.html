@@ -1,0 +1,86 @@
+<img src="https://miro.medium.com/max/828/1*2DP07p2-uw74G9bgbiCn_w.jpeg">
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/html">
+<head>
+    <meta charset="UTF-8">
+    <h1>
+        Problem Statement:<br><br></h1>
+
+<p>In past people did offline bookings for taxi services which was time consuming, had accessibility issues and many a times costly as well. With the advent of various online service providers, cab booking is longer a painful task for the consumers. Consumers can now login into the website and with a few clicks their travel is booked. But there are lot of technical complexities that are involved behind these bookings.
+
+<br>In this article we will try to go into details of some of the components in this complex booking system and deep dive into their complexities.
+</p><h1><br>Assumptions:<br></h1>
+
+<p>In this article we are mainly focussing on the search/booking flows so we will assume that all other services or functionalities like auth service, recommendation , gamification, payments service etc are already existing.
+Also we will not be deep diving into the algorithms that are used for finding the drivers which are best matching the given search.
+    Now lets deep dive in the design and understand different components of the system:<br></p>
+
+Components description<br>
+API Gateway:<br>
+
+API gateway will be start point for all the interactions between the clients and the system services. API gateway will handle all the boiler plate functionalities like authentication, SSL offloading, rate-limiting etc. thus enabling other services to focus on their concerns.
+
+    <h1><br>Cab Search Service:<br></h1>
+
+This service will provide APIs to enable the user to search for the cabs based on various parameters like location, date time, type of cab etc.
+On receiving the request the booking ID will be created for the request and call will be made to DMS for finding the best driver for the booking.
+This service is also responsible for optimising the search for a request by using various retry mechanisms in case matching driver is not found in one go.
+This service will also provide a web-hooks which will be used by the DMS for communicating the status of the booking. Internally the service will handle these status updates in async.
+This service will use the NO-SQL database for storing the data related to the search.<br>
+    <h1>Driver Management Service:<br></h1>
+
+This service will be used to manage the drivers related data like which all drivers are online, keeping track of the location of the driver, availability of the drivers, select the suitable drivers based on the search requirements etc.
+
+<br>Along with the above functionalities there is also a need of background jobs that will do the following actions:
+
+<br>Cleanup the status of drivers for the bookings that have timed out.
+<br>Initiate the deferred bookings.
+<br>DMS can use the SQL DB for storage as there are very frequent writes to the driver data, there are requirements of strict ACID compliance for driver status management and there might arise a need to perform complex join queries.
+
+    <h1><br>Cab booking service:<br></h1>
+
+This service will be used as the orchestrator for completing the booking like mapping driver with booking, completing the payments, performing operations like cancelations etc.
+<br><br>
+Other services:<br>
+
+Auth/User service: All the users of the application will have to register themselves to create their profile and to login into the system. This service will be used to handle all the user related data along with their login details.
+Notification Service: This service will be used to send out all sorts of notifications from the system be it SMS, Emails, push notifications etc.
+Trips Service : This service will store all the audit history of the trips that have been created by a user.
+Payments Service: This service will manage all the payment related functionalities like collection of payment, refund , settlement etc.
+<br><br>Events flow of a user for booking:<br>
+
+Clients will create their profile in the system.
+After login clients will provide the details of the location, date time, for whom the cab is getting booked etc and will request to search the cab.
+The request will be handled by CSS* to create a booking id for the search request. It will then forward the request to the DMS** for finding the best suitable match for the given booking id.
+Driver management service will search its database to find few nearest driver of the given location.
+DMS will update the driver assignment status to CSS after search is completed through web-hook call. There can be two scenarios here 1:) If the drivers are found in the vicinity then status of the drivers are updated to pending state and the CSS web-hook call is made to notify that the request has been sent to the drivers. 2:) But if no driver is found nearby in specified period of time then the status is communicated to the CSS which in turn can either restart the search few times or send the push notification to the client that booking cannot be made.
+All the matched drivers for the booking are notified so that they can take the action either by accepting the request or rejecting it.
+If the driver rejects the booking the status is communicated to the DMS and status for that driver is changed to available again.
+If all the drivers for a booking rejects the booking then the DMS will notify the CSS that no driver was found and CSS can again either retry or inform the client that cabs are not available.
+If the Driver accepts the booking its status is changed to reserved and DMS calls the CBS*** to confirm the booking. CBS will act as the orchestrator for handling all the actions related to the booking like cancel the booking, payments, refund etc. Also all the other drivers who were mapped to this booking will be freed up.
+After CBS receives the booking confirmed notification, it will create the booking event and push it to the status queue(Kinesis/Kafka). Notifications will read from this stream and push the booking confirmation notification to the client and Trip service will use this message to create a trip for this booking so that user can view this booking in trips history page.
+Once the ride is started notification will be sent to the client as well about the ride through CBS. In order to track the path of the ride a separate location management service would be needed. We are not deep diving into that part as part of this article.
+After the booking is completed driver call the CBS API for completing the booking. Now CBS can take further actions like trip status update, send completed notification to client , deduct payment etc.
+In above flow the cab was requested immediately but there can be case of the deferred booking as well. In such a case the CSS will receive the request and instead of starting search for the drivers immediately it will create an entry in the DB for this booking. A periodic background job will parse this data and booking id which are supposed to be booked in next window will be picked for processing and rest of the flow after the driver search will remain the same.
+Also there can be a case where the requests are sent to the drivers but none of the driver accepts/rejects the booking i.e timeout use-cases . To handle such a case a background job will run to scan the DMS database to find out all the bookings for which the drivers hasn’t responded to the booking request. These bookings will then be processed one by one and system itself will confirm the most suitable driver for that booking. Rest of the flow after the driver mapping is completed will remain same as above.
+<br>Events flow of a driver :<br>
+
+<br>Driver will create the profile in the system.<br>
+When the driver is available to take up the rides it will update the status as online into with the DMS.<br>
+<br>As the realtime driver location is needed to keep track of the drivers’ location the device will keep pushing the location periodically to the DMS so that DMS knows the latest location of the driver.
+    <h1><br><br> Characteristics of System<br></h1>
+
+Logging and Monitoring using Kibana.<br>
+As the service is deployed on cloud using EKS horizontal scaling can be done. Also as there are different loosely coupled components, each component can be scaled independent of any other component. Scaling criteria: Throughput, CPU usage, Memory usage.
+Each component is independent of each other so even if one component is down others will keep working and each component can also be scaled independently.
+<br><br>Note: Autoscaling configuration is an important factor that is needed to build the scalable system but the choice of criteria is very important in most cases CPU, memory usage will not lead to the right criteria. It can be based on number of concurrent users, number of messages flowing etc.
+
+Provide any feedbacks or clarifications or improvements in comments or if you like to discuss on some design topic please add in comments section.
+<br><br>
+<h1>Happy learning…<br>
+    </h1>
+</head>
+<body>
+
+</body>
+</html>

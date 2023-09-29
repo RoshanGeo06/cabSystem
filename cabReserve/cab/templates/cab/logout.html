@@ -1,0 +1,8 @@
+
+    {% extends 'cab/base.html' %}
+    {% load crispy_forms_tags %}
+
+    {% block content %}
+    <div class="container"><br><br>        <h1>you have been logged out</h1>
+        <h5><a href="{% url 'login' %}" class="btn" style="color:white;background-color:#fd5e14;" type="login" id="header-links">login again </a></h5></div>
+    {% endblock %}

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+  <html>
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>Payment</title>
+<style type="text/css">
+  body {
+  font-family: Verdana, Geneva, sans-serif;
+  font-size: 14px;
+  }
+  .intro {
+  background-color: yellow;
+}
+  .header {
+  width: 100%;
+  height: 40px;
+  background-color: #E1E1E1;
+  box-sizing:border-box;
+  margin-bottom: 4px;
+  margin-top: 4px;
+  margin-right: auto;
+  margin-left: auto;
+  }
+
+  .div1 {
+  width: 300px;
+  height: 100px;
+  border: 1px solid blue;
+}
+
+.div2 {
+  width: 300px;
+  height: 100px;
+  padding: 50px;
+  border: 1px solid red;
+}
+   .container {
+width: 100%;
+height: auto;
+background-color: #FF9;
+margin-right: auto;
+margin-left: auto;
+color: #066;
+}
+  .footer {
+  width: 100%;
+  height: 80px;
+  background-color: #666666;
+  color: #FFF;
+  margin-top: 12px;
+  margin-right: auto;
+  margin-left: auto;
+  }
+
+  table, th, td {
+  border: 1px solid white;
+  border-collapse: collapse;
+}
+th, td {
+  background-color: #96D4D4;
+}
+</style>
+  </head>
+<body>
+{% load crispy_forms_tags %}
+{% block content %}
+<div class="header" style="margin-top: 0px;">
+<div class="header" style="margin-left: 350px;">
+    <h3>PAYMENT</h3>
+</div>
+</div>
+<div class="" style="margin-left: 350px;">
+<form method="POST" action="{%  url 'payment' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{form|crispy}}
+    <br>
+    <button>PAY 1500</button>
+    <button>
+       <a href="{% url 'vehicle' %}" > Back</a>
+          </button>
+</form>
+</div>
+</body>
+{% endblock %}
